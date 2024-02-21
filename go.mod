@@ -1,4 +1,4 @@
-module github.com/raymundo.vr/sustainability-metrics
+module github.com/raymundovr/sustainability-metrics
 
 go 1.22.0
 
