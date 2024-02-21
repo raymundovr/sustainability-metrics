@@ -31,6 +31,7 @@ func main() {
 	testType := flag.String("test-type", "idle", "The type of test that you're observing, ex: idle, stress-test, etc")
 	project := flag.String("project", "", "Project's name")
 	projectNamespace := flag.String("namespace", "", "The Namespace where the observed project resides")
+	node := flag.String("node", "", "The node where the Project is running")
 
 	flag.Parse()
 
@@ -47,23 +48,24 @@ func main() {
 	queries := []query{
 		{
 			Id:           "kepler_dram",
-			Query:        `sum by (pod_name, container_namespace) (irate(kepler_container_dram_joules_total{container_namespace=~".*",pod_name=~".*"}[1m]))`,
+			Query:        fmt.Sprintf(`sum by (pod_name, container_namespace) (irate(kepler_container_dram_joules_total{container_namespace=~"%s",pod_name=~".*"}[1m]))`, *projectNamespace),
 			WatchMetrics: []string{"container_namespace", "pod_name"},
 		},
 		{
 			Id:           "kepler_package",
-			Query:        `sum by (pod_name, container_namespace) (irate(kepler_container_package_joules_total{container_namespace=~".*",pod_name=~".*"}[1m]))`,
+			Query:        fmt.Sprintf(`sum by (pod_name, container_namespace) (irate(kepler_container_package_joules_total{container_namespace=~"%s",pod_name=~".*"}[1m]))`, *projectNamespace),
 			WatchMetrics: []string{"container_namespace", "pod_name"},
 		},
 		{
 			Id:           "cpu_utilization_node",
-			Query:        `instance:node_cpu_utilisation:rate5m{job="node-exporter", instance="some-instance-here", cluster=""} != 0`,
+			Query:        fmt.Sprintf(`instance:node_cpu_utilisation:rate5m{job="node-exporter", instance="%s", cluster=""} != 0`, *node),
 			WatchMetrics: []string{"instance"},
 		},
 	}
 
 	fmt.Println("project_name:", *project)
 	fmt.Println("project_namespace:", *projectNamespace)
+	fmt.Println("node:", *node)
 	fmt.Println("test_type:", *testType)
 
 	for i := 0; i < *duration; i++ {
@@ -76,7 +78,7 @@ func main() {
 				}
 				records, err := performQuery(queryAPI, query, timeRange)
 				if err != nil {
-					fmt.Printf("\tCannot get results for query %s: %s", query.Id, err.Error())
+					fmt.Printf("Cannot get results for query %s: %s\n", query.Id, err.Error())
 					return
 				}
 				fmt.Println("query:", query.Id)
