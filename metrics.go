@@ -26,6 +26,7 @@ type Provider interface {
 
 func PrintMetrics(queries []query, provider Provider, duration int) {
 	var m sync.Mutex      // avoid mixing results when printing
+	var wgq sync.WaitGroup // wait for all queries
 
 	for i := 0; i < duration; i++ {
 		time.Sleep(1 * time.Minute)
@@ -35,7 +36,9 @@ func PrintMetrics(queries []query, provider Provider, duration int) {
 			End:   now,
 		}
 		for _, q := range queries {
+			wgq.Add(1)
 			go func(query query) {
+				defer wgq.Done()
 				records, err := provider.PerformQuery(query, timeRange)
 				m.Lock()
 				defer m.Unlock()
@@ -53,6 +56,7 @@ func PrintMetrics(queries []query, provider Provider, duration int) {
 					fmt.Println(strings.Join(line, ","))
 				}
 			}(q)
+			wgq.Wait()
 		}
 	}
 }
