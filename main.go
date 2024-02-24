@@ -5,6 +5,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -58,7 +60,7 @@ func main() {
 		},
 		{
 			Id:           "cpu_utilization_node",
-			Query:        fmt.Sprintf(`instance:node_cpu_utilisation:rate5m{job="node-exporter", instance="%s", cluster=""} != 0`, *node),
+			Query:        fmt.Sprintf(`instance:node_cpu_utilisation:rate5m{job="node-exporter", instance="%s"} != 0`, *node),
 			WatchMetrics: []string{"instance"},
 		},
 	}
@@ -67,26 +69,31 @@ func main() {
 	fmt.Println("project_namespace:", *projectNamespace)
 	fmt.Println("node:", *node)
 	fmt.Println("test_type:", *testType)
+	var m sync.Mutex // avoid mixing results when printing
 
 	for i := 0; i < *duration; i++ {
+		now := time.Now()
+		timeRange := timerange{
+			Start: now.Add(-time.Minute),
+			End:   now,
+		}
 		for _, q := range queries {
 			go func(query query) {
-				now := time.Now()
-				timeRange := timerange{
-					Start: now.Add(-time.Minute),
-					End:   now,
-				}
 				records, err := performQuery(queryAPI, query, timeRange)
-				if err != nil {
-					fmt.Printf("Cannot get results for query %s: %s\n", query.Id, err.Error())
-					return
-				}
+				m.Lock()
+				defer m.Unlock()
 				fmt.Println("query:", query.Id)
 				fmt.Println("query_time_start:", timeRange.Start.Unix())
 				fmt.Println("query_time_end:", timeRange.End.Unix())
 				fmt.Println("results:")
+				if err != nil {
+					fmt.Printf("Cannot get results for query %s: %s\n", query.Id, err.Error())
+					return
+				}
+				header := append(query.WatchMetrics, "timestamp", "value")
+				fmt.Println(strings.Join(header, ","))
 				for _, line := range records {
-					fmt.Println(line)
+					fmt.Println(strings.Join(line, ","))
 				}
 			}(q)
 		}
