@@ -33,6 +33,11 @@ func main() {
 			WatchMetrics: []string{"container_namespace", "pod_name"},
 		},
 		{
+			Id:           "kepler_total",
+			Query:        fmt.Sprintf(`sum by (pod_name, container_namespace) (irate(kepler_container_joules_total{container_namespace=~"%s",pod_name=~".*"}[1m]))`, *projectNamespace),
+			WatchMetrics: []string{"container_namespace", "pod_name"},
+		},
+		{
 			Id:           "cpu_utilization_node",
 			Query:        fmt.Sprintf(`instance:node_cpu_utilisation:rate5m{job="node-exporter", instance="%s"} != 0`, *node),
 			WatchMetrics: []string{"instance"},
