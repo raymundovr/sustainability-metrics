@@ -1,31 +1,13 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/api"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/common/model"
 )
-
-type records [][]string
-
-type query struct {
-	Id           string
-	Query        string
-	WatchMetrics []string
-}
-
-type timerange struct {
-	Start time.Time
-	End   time.Time
-}
 
 func main() {
 	prometheusURL := flag.String("prometheus-url", "http://localhost:9090", "Prometheus URL")
@@ -37,15 +19,10 @@ func main() {
 
 	flag.Parse()
 
-	client, err := api.NewClient(api.Config{
-		Address: *prometheusURL,
-	})
+	provider, err := NewPrometheusProvider(*prometheusURL)
 	if err != nil {
-		fmt.Println("Error creating client:", err)
-		return
+		log.Fatal("Cannot create Provider: ", err.Error())
 	}
-
-	queryAPI := v1.NewAPI(client)
 
 	queries := []query{
 		{
@@ -79,7 +56,7 @@ func main() {
 		}
 		for _, q := range queries {
 			go func(query query) {
-				records, err := performQuery(queryAPI, query, timeRange)
+				records, err := provider.PerformQuery(query, timeRange)
 				m.Lock()
 				defer m.Unlock()
 				fmt.Println("query:", query.Id)
@@ -101,41 +78,4 @@ func main() {
 	}
 }
 
-func performQuery(queryAPI v1.API, query query, timeRange timerange) (records, error) {
-	result, warnings, err := queryAPI.QueryRange(context.Background(), query.Query, v1.Range{
-		Start: timeRange.Start,
-		End:   timeRange.End,
-		Step:  15 * time.Second,
-	})
-	if err != nil {
-		return nil, err
-	}
 
-	if len(warnings) > 0 {
-		fmt.Println("\tWarnings received:", warnings)
-	}
-
-	// Print query result
-	matrix, ok := result.(model.Matrix)
-	if !ok {
-		return nil, errors.New("result is not a matrix")
-	}
-	// namespace, pod, time, value
-	records := [][]string{}
-	for _, series := range matrix {
-		labelValues := []string{}
-		for _, label := range query.WatchMetrics {
-			val, ok := series.Metric[model.LabelName(label)]
-			if !ok {
-				fmt.Println("\tWarn: Label", label, "does not exist for", query.Id)
-			}
-			labelValues = append(labelValues, string(val))
-		}
-		for _, sample := range series.Values {
-			record := append(labelValues, sample.Timestamp.String(), sample.Value.String())
-			records = append(records, record)
-		}
-	}
-
-	return records, nil
-}
