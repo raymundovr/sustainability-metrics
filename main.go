@@ -4,9 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"strings"
-	"sync"
-	"time"
 )
 
 func main() {
@@ -46,36 +43,8 @@ func main() {
 	fmt.Println("project_namespace:", *projectNamespace)
 	fmt.Println("node:", *node)
 	fmt.Println("test_type:", *testType)
-	var m sync.Mutex // avoid mixing results when printing
-
-	for i := 0; i < *duration; i++ {
-		now := time.Now()
-		timeRange := timerange{
-			Start: now.Add(-time.Minute),
-			End:   now,
-		}
-		for _, q := range queries {
-			go func(query query) {
-				records, err := provider.PerformQuery(query, timeRange)
-				m.Lock()
-				defer m.Unlock()
-				fmt.Println("query:", query.Id)
-				fmt.Println("query_time_start:", timeRange.Start.Unix())
-				fmt.Println("query_time_end:", timeRange.End.Unix())
-				fmt.Println("results:")
-				if err != nil {
-					fmt.Printf("Cannot get results for query %s: %s\n", query.Id, err.Error())
-					return
-				}
-				header := append(query.WatchMetrics, "timestamp", "value")
-				fmt.Println(strings.Join(header, ","))
-				for _, line := range records {
-					fmt.Println(strings.Join(line, ","))
-				}
-			}(q)
-		}
-		time.Sleep(1 * time.Minute)
-	}
+	
+	PrintMetrics(queries, provider, *duration)
 }
 
 
